@@ -1,0 +1,1 @@
+from storysync.gui.app import App
