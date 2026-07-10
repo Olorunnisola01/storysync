@@ -91,6 +91,7 @@ LOGO_POSITIONS   = ["Top-Right", "Top-Left", "Bottom-Right", "Bottom-Left"]
 TEXTURES = [
     "Blank", "Lines", "College Ruled", "Graph Paper", "Dot Grid",
     "Yellow Ruled", "Sandpaper", "Aged Paper", "Linen", "Grid",
+    "Vellum", "Kraft Paper",
 ]
 
 MIN_SENTENCE_GAP = 0.08

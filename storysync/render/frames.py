@@ -1,5 +1,6 @@
 """Frame rendering with highlight styles."""
 
+import math
 import random
 import threading
 
@@ -213,6 +214,65 @@ def _draw_texture(draw, img, cx0, cy0, cx1, cy1, texture, card_color):
             if x % 4 == 0:
                 draw.line([(x, cy0), (x, cy1)], fill=v_color, width=1)
             x += 2
+
+    elif texture == 'Vellum':
+        # Cloudy, mottled parchment: soft blurred blotches + fine grain speckle.
+        r, g, b = _hex_to_rgb(card_color)
+        blotch = Image.new('RGBA', img.size, (0, 0, 0, 0))
+        bdraw = ImageDraw.Draw(blotch)
+        rng = random.Random(23)
+        n_blotches = max(18, (cx1 - cx0) * (cy1 - cy0) // 9000)
+        for _ in range(n_blotches):
+            bx = rng.randint(cx0, cx1 - 1)
+            by = rng.randint(cy0, cy1 - 1)
+            rad = rng.randint(18, 55)
+            shade = rng.randint(-30, 20)
+            a = rng.randint(10, 26)
+            cr = max(0, min(255, r + shade))
+            cg = max(0, min(255, g + int(shade * 0.85)))
+            cb = max(0, min(255, b + int(shade * 0.6)))
+            bdraw.ellipse([bx - rad, by - rad, bx + rad, by + rad],
+                          fill=(cr, cg, cb, a))
+        blotch = blotch.filter(ImageFilter.GaussianBlur(radius=14))
+
+        grain = Image.new('RGBA', img.size, (0, 0, 0, 0))
+        gdraw = ImageDraw.Draw(grain)
+        for _ in range((cx1 - cx0) * (cy1 - cy0) // 5):
+            nx = rng.randint(cx0, cx1 - 1)
+            ny = rng.randint(cy0, cy1 - 1)
+            v = rng.randint(-40, 30)
+            a = rng.randint(6, 20)
+            cr = max(0, min(255, r + v))
+            cg = max(0, min(255, g + int(v * 0.85)))
+            cb = max(0, min(255, b + int(v * 0.6)))
+            gdraw.point((nx, ny), fill=(cr, cg, cb, a))
+
+        noise = Image.alpha_composite(blotch, grain)
+        img = Image.alpha_composite(img.convert('RGBA'), noise).convert('RGB')
+        draw = ImageDraw.Draw(img)
+
+    elif texture == 'Kraft Paper':
+        # Fibrous flecked paper: dense short random-angle fiber strokes.
+        r, g, b = _hex_to_rgb(card_color)
+        noise = Image.new('RGBA', img.size, (0, 0, 0, 0))
+        ndraw = ImageDraw.Draw(noise)
+        rng = random.Random(91)
+        n_fibers = (cx1 - cx0) * (cy1 - cy0) // 45
+        for _ in range(n_fibers):
+            fx = rng.uniform(cx0, cx1 - 1)
+            fy = rng.uniform(cy0, cy1 - 1)
+            length = rng.uniform(2, 7)
+            angle = rng.uniform(0, math.pi)
+            dx = math.cos(angle) * length
+            dy = math.sin(angle) * length
+            shade = rng.randint(-35, 25)
+            a = rng.randint(15, 40)
+            cr = max(0, min(255, r + shade))
+            cg = max(0, min(255, g + int(shade * 0.8)))
+            cb = max(0, min(255, b + int(shade * 0.55)))
+            ndraw.line([(fx, fy), (fx + dx, fy + dy)], fill=(cr, cg, cb, a), width=1)
+        img = Image.alpha_composite(img.convert('RGBA'), noise).convert('RGB')
+        draw = ImageDraw.Draw(img)
 
     return img, draw
 
