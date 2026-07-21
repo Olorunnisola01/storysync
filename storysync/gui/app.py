@@ -27,6 +27,7 @@ from storysync.render.config import RenderConfig
 from storysync.render.layout import LayoutCache
 from storysync.text import iter_sentences, paginate, parse_story, prompt_excerpt, story_stats
 from storysync.transcription import get_timestamps, test_provider
+from storysync.transcription.import_file import parse_transcript_file
 from storysync.transcription.chunking import get_audio_duration
 
 
@@ -83,6 +84,7 @@ class App(ctk.CTk):
         self._dg_key = ctk.StringVar(value=cfg.get('deepgram_api_key', ''))
         self._provider = ctk.StringVar(value=cfg.get('provider', list(PROVIDERS.keys())[0]))
         self._dg_model = ctk.StringVar(value=cfg.get('deepgram_model', list(DEEPGRAM_MODELS.keys())[0]))
+        self._transcript_path = ctk.StringVar(value=cfg.get('transcript_path', ''))
         self._family = ctk.StringVar(value=cfg.get('font_family', 'Georgia'))
         self._bsize = ctk.IntVar(value=cfg.get('body_size', 34))
         self._hsize = ctk.IntVar(value=cfg.get('heading_size', 28))
@@ -141,7 +143,7 @@ class App(ctk.CTk):
 
         for var in (self._audio, self._output, self._preset, self._ratio, self._ppage,
                     self._lang, self._openai_key, self._dg_key, self._provider,
-                    self._dg_model, self._family, self._bsize,
+                    self._dg_model, self._transcript_path, self._family, self._bsize,
                     self._hsize, self._spacing, self._para_spacing, self._group,
                     self._chapter_color, self._highlight_color, self._highlight_style,
                     self._text_color, self._bg_color, self._card_color,
@@ -220,6 +222,7 @@ class App(ctk.CTk):
             'deepgram_api_key': self._dg_key.get(),
             'provider': self._provider.get(),
             'deepgram_model': self._dg_model.get(),
+            'transcript_path': self._transcript_path.get(),
             'font_family': self._family.get(),
             'body_size': self._bsize.get(),
             'heading_size': self._hsize.get(),
@@ -366,6 +369,26 @@ class App(ctk.CTk):
         lbl('Deepgram Model')
         _scrollable_combo(right, self._dg_model, list(DEEPGRAM_MODELS.keys())).grid(
             row=r, column=0, padx=12, pady=(0, 4), sticky='ew')
+        r += 1
+
+        ctk.CTkLabel(right, text='── OR: Import Transcript (skips API) ──',
+                     font=ctk.CTkFont(size=12, weight='bold'),
+                     text_color='gray').grid(
+            row=r, column=0, padx=12, pady=(10, 2), sticky='w')
+        r += 1
+
+        lbl('Transcript File  (.json / .srt / .txt — with timestamps)')
+        tr_row = ctk.CTkFrame(right, fg_color='transparent')
+        tr_row.grid(row=r, column=0, padx=12, pady=(0, 8), sticky='ew')
+        tr_row.grid_columnconfigure(0, weight=1)
+        ctk.CTkEntry(tr_row, textvariable=self._transcript_path,
+                     placeholder_text='No file selected').grid(
+            row=0, column=0, sticky='ew')
+        ctk.CTkButton(tr_row, text='Browse', width=70,
+                      command=self._browse_transcript).grid(row=0, column=1, padx=(6, 0))
+        ctk.CTkButton(tr_row, text='Clear', width=56,
+                      command=lambda: self._transcript_path.set('')).grid(
+            row=0, column=2, padx=(6, 0))
         r += 1
 
         test_f = ctk.CTkFrame(right, fg_color='transparent')
@@ -1290,9 +1313,17 @@ class App(ctk.CTk):
     def _analyze_timestamps(self):
         story = self._story.get('1.0', 'end').strip()
         audio = self._audio.get().strip()
+        transcript_path = self._transcript_path.get().strip()
         key = self._active_api_key()
-        if not story or not audio or not key:
-            messagebox.showwarning('Missing', 'Need story, audio, and API key.')
+        if not story or not audio:
+            messagebox.showwarning('Missing', 'Need story and audio.')
+            return
+        if not transcript_path and not key:
+            messagebox.showwarning(
+                'Missing', 'Need an API key, or an imported transcript file (JSON/SRT/TXT).')
+            return
+        if transcript_path and not Path(transcript_path).exists():
+            messagebox.showwarning('Missing', 'Transcript file not found.')
             return
 
         self._ts_summary.configure(text='Analyzing…')
@@ -1301,11 +1332,14 @@ class App(ctk.CTk):
         def work():
             try:
                 prov = _provider_key(self._provider.get())
-                cache = str(Path(audio).with_suffix('.timestamps.json'))
-                words, utts = get_timestamps(
-                    audio, cache, prov, key, self._lang.get(),
-                    deepgram_model=DEEPGRAM_MODELS.get(self._dg_model.get(), 'nova-3'),
-                    story_prompt=prompt_excerpt(story))
+                if transcript_path:
+                    words, utts = parse_transcript_file(transcript_path)
+                else:
+                    cache = str(Path(audio).with_suffix('.timestamps.json'))
+                    words, utts = get_timestamps(
+                        audio, cache, prov, key, self._lang.get(),
+                        deepgram_model=DEEPGRAM_MODELS.get(self._dg_model.get(), 'nova-3'),
+                        story_prompt=prompt_excerpt(story))
                 words = expand_compounds(words, story)
                 group_size = GROUP_OPTIONS.get(self._group.get(), 0)
                 per_page = max(1, min(20, int(self._ppage.get() or 5)))
@@ -1324,8 +1358,8 @@ class App(ctk.CTk):
                     snippet = sent['text'][:60] + ('…' if len(sent['text']) > 60 else '')
                     lines.append(f'{i:4d}  {t:7.2f}s  {conf*100:4.0f}%  {snippet}{flag}')
 
-                summary = (f'{len(lines)} sentences · {low} low-confidence · '
-                           f'provider: {prov}')
+                source = 'imported transcript' if transcript_path else f'provider: {prov}'
+                summary = f'{len(lines)} sentences · {low} low-confidence · {source}'
                 self.after(0, lambda: self._show_ts_results(summary, '\n'.join(lines)))
             except Exception as e:
                 self.after(0, lambda: self._ts_summary.configure(text=f'Error: {e}'))
@@ -1500,6 +1534,15 @@ class App(ctk.CTk):
         if p:
             self._output.set(p)
 
+    def _browse_transcript(self):
+        p = filedialog.askopenfilename(
+            title='Select transcript file',
+            filetypes=[('Transcript', '*.json *.srt *.txt'),
+                       ('JSON', '*.json'), ('SRT', '*.srt'), ('Text', '*.txt'),
+                       ('All', '*.*')])
+        if p:
+            self._transcript_path.set(p)
+
     def _browse_watermark(self):
         p = filedialog.askopenfilename(
             title='Select watermark image',
@@ -1524,6 +1567,7 @@ class App(ctk.CTk):
         story = self._story.get('1.0', 'end').strip()
         audio = self._audio.get().strip()
         output = self._output.get().strip()
+        transcript_path = self._transcript_path.get().strip()
         key = self._active_api_key()
 
         if not story:
@@ -1535,8 +1579,14 @@ class App(ctk.CTk):
         if not output:
             messagebox.showerror('Missing', 'Please set an output file path.')
             return
-        if not key:
-            messagebox.showerror('Missing', 'Please enter your API key for the selected provider.')
+        if not transcript_path and not key:
+            messagebox.showerror(
+                'Missing',
+                'Please enter your API key for the selected provider, '
+                'or import a transcript file (JSON/SRT/TXT) instead.')
+            return
+        if transcript_path and not Path(transcript_path).exists():
+            messagebox.showerror('Missing', 'Transcript file not found.')
             return
         if not check_ffmpeg():
             messagebox.showerror('FFmpeg', 'FFmpeg is not installed or not on PATH.')
@@ -1579,11 +1629,15 @@ class App(ctk.CTk):
                 items = parse_story(story, group_size)
                 pages = paginate(items, per_page)
 
-                q.put(('p', 0.06, f'Transcribing via {prov}…'))
-                cache = str(Path(audio).with_suffix('.timestamps.json'))
-                words, utterances = get_timestamps(
-                    audio, cache, prov, key, self._lang.get(),
-                    deepgram_model=dg_m, story_prompt=prompt_excerpt(story))
+                if transcript_path:
+                    q.put(('p', 0.06, 'Loading imported transcript…'))
+                    words, utterances = parse_transcript_file(transcript_path)
+                else:
+                    q.put(('p', 0.06, f'Transcribing via {prov}…'))
+                    cache = str(Path(audio).with_suffix('.timestamps.json'))
+                    words, utterances = get_timestamps(
+                        audio, cache, prov, key, self._lang.get(),
+                        deepgram_model=dg_m, story_prompt=prompt_excerpt(story))
                 words = expand_compounds(words, story)
                 total_dur = get_audio_duration(audio)
 
