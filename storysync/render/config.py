@@ -75,3 +75,8 @@ class RenderConfig:
     title_body_gap:   float = 0.3    # gap below chapter heading = max(4, heading_size * this)
     card_margin:      float = 0.055  # card inset from image edges (fraction of image size)
     text_padding:     float = 0.035  # text inset from card edges (fraction of card width)
+
+    # ── Keyword word colours ────────────────────────────────────────────────
+    # Maps a lower-cased whole word -> hex colour. Applied to body text only
+    # (not the chapter heading), matching every occurrence of that word.
+    keyword_colors: dict = field(default_factory=dict)

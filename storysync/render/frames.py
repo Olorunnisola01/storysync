@@ -2,6 +2,7 @@
 
 import math
 import random
+import re
 import threading
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -116,6 +117,17 @@ def _draw_logo(img, cx0, cy0, cx1, cy1, W, H,
 def _hex_to_rgb(h):
     h = h.lstrip('#')
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+_WORD_STRIP_RE = re.compile(r'^\W+|\W+$', re.UNICODE)
+
+
+def _keyword_color(word, keyword_colors, default):
+    """Return the mapped colour for *word* (whole-word, case-insensitive), or default."""
+    if not keyword_colors:
+        return default
+    key = _WORD_STRIP_RE.sub('', word).lower()
+    return keyword_colors.get(key, default)
 
 
 # ── Non-ruled background textures (drawn before text) ────────────────────────
@@ -550,6 +562,7 @@ def render_frame(W, H, page_items, cfg: RenderConfig,
     title_body_gap    = cfg.title_body_gap
     card_margin       = cfg.card_margin
     text_padding      = cfg.text_padding
+    keyword_colors    = cfg.keyword_colors
 
     eff_bg      = bg_color      or preset['bg']
     eff_card    = card_color    or preset['card']
@@ -847,12 +860,14 @@ def render_frame(W, H, page_items, cfg: RenderConfig,
                         extra = (tmax_blk - total_word_w) / n_gaps
                         x = float(block['tx0'])
                         for wi, (word, ww) in enumerate(zip(words, word_widths)):
+                            color = _keyword_color(word, keyword_colors, eff_text)
                             draw.text((int(x), y), word,
-                                      font=block['font'], fill=eff_text, **_sk)
+                                      font=block['font'], fill=color, **_sk)
                             x += ww + (extra if wi < n_gaps else 0)
                     else:
+                        color = _keyword_color(line, keyword_colors, eff_text)
                         draw.text((block['tx0'], y), line,
-                                  font=block['font'], fill=eff_text, **_sk)
+                                  font=block['font'], fill=color, **_sk)
                 else:
                     x_off = 0
                     if text_align not in ('left', 'justify') and li < len(lw_list):
@@ -861,8 +876,20 @@ def render_frame(W, H, page_items, cfg: RenderConfig,
                             x_off = (tmax_blk - lw) // 2
                         elif text_align == 'right':
                             x_off = max(0, tmax_blk - lw)
-                    draw.text((block['tx0'] + x_off, y), line,
-                              font=block['font'], fill=eff_text, **_sk)
+                    if keyword_colors:
+                        words = line.split()
+                        prefix = ''
+                        for wi, word in enumerate(words):
+                            wx = block['tx0'] + x_off + (
+                                draw.textbbox((0, 0), prefix, font=block['font'])[2]
+                                if prefix else 0)
+                            color = _keyword_color(word, keyword_colors, eff_text)
+                            draw.text((wx, y), word,
+                                      font=block['font'], fill=color, **_sk)
+                            prefix += word + (' ' if wi < len(words) - 1 else '')
+                    else:
+                        draw.text((block['tx0'] + x_off, y), line,
+                                  font=block['font'], fill=eff_text, **_sk)
                 y += block['lh']
 
     # ── PHASE 7: Page number badge ────────────────────────────────────────

@@ -127,6 +127,7 @@ class App(ctk.CTk):
         self._title_body_gap    = ctk.DoubleVar(value=cfg.get('title_body_gap', 0.3))
         self._card_margin       = ctk.DoubleVar(value=cfg.get('card_margin', 0.055))
         self._text_padding      = ctk.DoubleVar(value=cfg.get('text_padding', 0.035))
+        self._keyword_colors    = dict(cfg.get('keyword_colors', {}))
         self._custom_presets    = load_custom_presets()
         saved_group = cfg.get('group_mode', GROUP_KEYS[0])
         self._group = ctk.StringVar(value=saved_group if saved_group in GROUP_KEYS else GROUP_KEYS[0])
@@ -264,6 +265,7 @@ class App(ctk.CTk):
             'title_body_gap': self._title_body_gap.get(),
             'card_margin': self._card_margin.get(),
             'text_padding': self._text_padding.get(),
+            'keyword_colors': dict(self._keyword_colors),
         })
 
     def _build(self):
@@ -762,6 +764,38 @@ class App(ctk.CTk):
         lbl('Logo Opacity  (0 = invisible, 1 = solid)')
         slider_row(self._logo_opacity, 0.0, 1.0, 20, fmt='{:.2f}')
 
+        # ── Keyword Word Colours ────────────────────────────────────────────
+        ctk.CTkLabel(ctrl, text='── Keyword Word Colours ──',
+                     font=ctk.CTkFont(size=12, weight='bold'),
+                     text_color='gray').grid(
+            row=r, column=0, padx=12, pady=(8, 4), sticky='w')
+        r += 1
+
+        lbl('Colour every occurrence of a word in the body text\n'
+            '(whole word, case-insensitive — heading text is unaffected)')
+
+        kw_add_row = ctk.CTkFrame(ctrl, fg_color='transparent')
+        kw_add_row.grid(row=r, column=0, padx=12, pady=(0, 6), sticky='ew')
+        kw_add_row.grid_columnconfigure(0, weight=1)
+        self._kw_entry = ctk.CTkEntry(kw_add_row, placeholder_text='word, e.g. endlich')
+        self._kw_entry.grid(row=0, column=0, sticky='ew')
+        self._kw_entry.bind('<Return>', lambda e: self._add_keyword_color())
+        self._kw_new_color = '#e02020'
+        self._kw_color_btn = ctk.CTkButton(
+            kw_add_row, text='●', width=32, fg_color=self._kw_new_color,
+            hover_color=self._kw_new_color, command=self._pick_keyword_new_color)
+        self._kw_color_btn.grid(row=0, column=1, padx=(6, 0))
+        ctk.CTkButton(kw_add_row, text='Add', width=52,
+                      command=self._add_keyword_color).grid(row=0, column=2, padx=(6, 0))
+        r += 1
+
+        self._kw_list_frame = ctk.CTkFrame(ctrl, fg_color='transparent')
+        self._kw_list_frame.grid(row=r, column=0, padx=12, pady=(0, 10), sticky='ew')
+        self._kw_list_frame.grid_columnconfigure(0, weight=1)
+        r += 1
+
+        self._refresh_keyword_list()
+
         prev_frm = ctk.CTkFrame(parent)
         prev_frm.grid(row=0, column=1, padx=(8, 0), pady=4, sticky='nsew')
         prev_frm.grid_rowconfigure(1, weight=1)
@@ -1051,6 +1085,7 @@ class App(ctk.CTk):
             title_body_gap=self._title_body_gap.get(),
             card_margin=self._card_margin.get(),
             text_padding=self._text_padding.get(),
+            keyword_colors=dict(self._keyword_colors),
         )
 
     def _on_story_change(self):
@@ -1406,6 +1441,50 @@ class App(ctk.CTk):
 
     def _pick_badge_number_color(self):
         self._pick_color(self._badge_number_color, '_badge_number_btn', 'Badge Number Colour')
+
+    # ── Keyword word colour management ────────────────────────────────────────
+
+    def _pick_keyword_new_color(self):
+        result = colorchooser.askcolor(color=self._kw_new_color, title='Word Colour')
+        if result and result[1]:
+            self._kw_new_color = result[1]
+            self._kw_color_btn.configure(fg_color=result[1], hover_color=result[1])
+
+    def _add_keyword_color(self):
+        word = self._kw_entry.get().strip()
+        if not word:
+            return
+        self._keyword_colors[word.lower()] = self._kw_new_color
+        self._kw_entry.delete(0, 'end')
+        self._refresh_keyword_list()
+        self._on_style_change()
+        self._on_setting_change()
+
+    def _remove_keyword_color(self, key):
+        self._keyword_colors.pop(key, None)
+        self._refresh_keyword_list()
+        self._on_style_change()
+        self._on_setting_change()
+
+    def _refresh_keyword_list(self):
+        for child in self._kw_list_frame.winfo_children():
+            child.destroy()
+        if not self._keyword_colors:
+            ctk.CTkLabel(self._kw_list_frame, text='No coloured words yet.',
+                         font=ctk.CTkFont(size=11), text_color='gray').grid(
+                row=0, column=0, sticky='w')
+            return
+        for i, (word, color) in enumerate(sorted(self._keyword_colors.items())):
+            row_f = ctk.CTkFrame(self._kw_list_frame, fg_color='transparent')
+            row_f.grid(row=i, column=0, sticky='ew', pady=2)
+            row_f.grid_columnconfigure(1, weight=1)
+            ctk.CTkLabel(row_f, text='●', text_color=color,
+                         font=ctk.CTkFont(size=16), width=16).grid(row=0, column=0, padx=(0, 6))
+            ctk.CTkLabel(row_f, text=word, anchor='w').grid(row=0, column=1, sticky='w')
+            ctk.CTkButton(row_f, text='×', width=24, height=24,
+                          fg_color='#8b1a1a', hover_color='#6b0e0e',
+                          command=lambda k=word: self._remove_keyword_color(k)).grid(
+                row=0, column=2)
 
     def _browse_audio(self):
         p = filedialog.askopenfilename(
