@@ -1155,22 +1155,20 @@ class App(ctk.CTk):
             return
 
         W, H = RATIOS.get(self._ratio.get(), (1920, 1080))
-        # Scale down uniformly so the preview keeps the exact same aspect
-        # ratio as the final render. Clamping each axis to a separate floor
-        # (e.g. max(480, W//3), max(270, H//3)) distorts portrait 9:16 video
-        # into a squatter ~3:4 preview, so layout/wrapping never matched the
-        # real export — bump the *scale* instead, never the axes independently.
-        min_w, min_h = 480, 270
-        scale = 1 / 3
-        if W * scale < min_w or H * scale < min_h:
-            scale = max(min_w / W, min_h / H)
-        pW, pH = max(1, round(W * scale)), max(1, round(H * scale))
+        # Render the preview at the exact same resolution as the final
+        # export. A downscaled preview canvas needs its font sizes scaled
+        # down too, and int()-truncating those sizes shifts word-wrap
+        # points just enough that a different number of sentences fit per
+        # page than at full resolution — the preview would then paginate
+        # differently from the real render (e.g. showing 6 sentences fit
+        # on a page when only 5 actually do). Rendering at full size makes
+        # layout/wrapping/pagination pixel-identical to the export; the
+        # display-side zoom/resize in _apply_preview_zoom handles shrinking
+        # it to fit the on-screen preview pane.
+        pW, pH = W, H
 
         # Build config on the main thread (StringVar/IntVar reads must be here).
         cfg = self._build_render_cfg()
-        # Scale fonts to preview resolution
-        cfg.body_size    = max(12, int(cfg.body_size    * pW / W))
-        cfg.heading_size = max(10, int(cfg.heading_size * pW / W))
 
         # Use safe_idx for read-only access; _show_preview clamps it later.
         safe_idx = min(self._preview_page_idx, len(pages) - 1)
