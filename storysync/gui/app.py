@@ -1155,7 +1155,16 @@ class App(ctk.CTk):
             return
 
         W, H = RATIOS.get(self._ratio.get(), (1920, 1080))
-        pW, pH = max(480, W // 3), max(270, H // 3)
+        # Scale down uniformly so the preview keeps the exact same aspect
+        # ratio as the final render. Clamping each axis to a separate floor
+        # (e.g. max(480, W//3), max(270, H//3)) distorts portrait 9:16 video
+        # into a squatter ~3:4 preview, so layout/wrapping never matched the
+        # real export — bump the *scale* instead, never the axes independently.
+        min_w, min_h = 480, 270
+        scale = 1 / 3
+        if W * scale < min_w or H * scale < min_h:
+            scale = max(min_w / W, min_h / H)
+        pW, pH = max(1, round(W * scale)), max(1, round(H * scale))
 
         # Build config on the main thread (StringVar/IntVar reads must be here).
         cfg = self._build_render_cfg()
