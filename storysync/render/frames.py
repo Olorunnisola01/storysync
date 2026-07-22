@@ -793,7 +793,15 @@ def render_frame(W, H, page_items, cfg: RenderConfig,
         _sl = Image.new('RGBA', (W, H), (0, 0, 0, 0))
         _sld = ImageDraw.Draw(_sl)
         _sr, _sg, _sb = _hex_to_rgb(eff_text)
-        _sf = (_sr, _sg, _sb, 255)
+        _sf_default = (_sr, _sg, _sb, 255)
+
+        def _stroke_fill(word):
+            color = _keyword_color(word, keyword_colors, eff_text)
+            if color == eff_text:
+                return _sf_default
+            _cr, _cg, _cb = _hex_to_rgb(color)
+            return (_cr, _cg, _cb, 255)
+
         for _blk in blocks:
             if _blk['type'] != 'paragraph':
                 continue
@@ -810,12 +818,14 @@ def render_frame(W, H, page_items, cfg: RenderConfig,
                         _ex  = (_tm - sum(_wws)) / (len(_ws) - 1)
                         _x   = float(_blk['tx0'])
                         for _wi, (_w, _ww) in enumerate(zip(_ws, _wws)):
+                            _c = _stroke_fill(_w)
                             _sld.text((int(_x), _y), _w, font=_blk['font'],
-                                      fill=_sf, stroke_width=1, stroke_fill=_sf)
+                                      fill=_c, stroke_width=1, stroke_fill=_c)
                             _x += _ww + (_ex if _wi < len(_ws) - 1 else 0)
                     else:
+                        _c = _stroke_fill(_ln)
                         _sld.text((_blk['tx0'], _y), _ln, font=_blk['font'],
-                                  fill=_sf, stroke_width=1, stroke_fill=_sf)
+                                  fill=_c, stroke_width=1, stroke_fill=_c)
                 else:
                     _xo = 0
                     if text_align not in ('left', 'justify') and _li < len(_lw):
@@ -823,8 +833,20 @@ def render_frame(W, H, page_items, cfg: RenderConfig,
                             _xo = (_tm - _lw[_li]) // 2
                         elif text_align == 'right':
                             _xo = max(0, _tm - _lw[_li])
-                    _sld.text((_blk['tx0'] + _xo, _y), _ln, font=_blk['font'],
-                              fill=_sf, stroke_width=1, stroke_fill=_sf)
+                    if keyword_colors:
+                        _ws = _ln.split()
+                        _prefix = ''
+                        for _wi, _w in enumerate(_ws):
+                            _wx = _blk['tx0'] + _xo + (
+                                _sld.textbbox((0, 0), _prefix, font=_blk['font'])[2]
+                                if _prefix else 0)
+                            _c = _stroke_fill(_w)
+                            _sld.text((_wx, _y), _w, font=_blk['font'],
+                                      fill=_c, stroke_width=1, stroke_fill=_c)
+                            _prefix += _w + (' ' if _wi < len(_ws) - 1 else '')
+                    else:
+                        _sld.text((_blk['tx0'] + _xo, _y), _ln, font=_blk['font'],
+                                  fill=_sf_default, stroke_width=1, stroke_fill=_sf_default)
                 _y += _blk['lh']
         _rc, _gc, _bc, _ac = _sl.split()
         _ac = _ac.point(lambda p: int(p * _sa))
