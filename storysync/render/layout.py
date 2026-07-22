@@ -171,6 +171,16 @@ def reflow_pages(pages, font_body, font_heading, W, H, line_spacing,
     Sentences keep their _id and order. Only page boundaries shift.
     Chapter headings are always propagated to every page of that chapter
     so they render persistently until the next chapter begins.
+
+    Incoming *pages* were already grouped by sentence count ("Max Sentences
+    per Page"), a purely textual split that knows nothing about how much
+    vertical space that text actually needs. If a group's leftover — after
+    height-fitting cuts it down to what fits on screen — is only a sentence
+    or two, that remainder used to become its own near-empty physical page
+    while the *next* group started completely fresh below it. Fix: flatten
+    every group's items back into one continuous stream per chapter before
+    running the height-based fit, so a physical page keeps pulling in
+    items from whatever comes next until it's actually full.
     """
     from PIL import Image, ImageDraw as _ImageDraw
     _img = Image.new('RGB', (W, H), '#ffffff')
@@ -199,11 +209,20 @@ def reflow_pages(pages, font_body, font_heading, W, H, line_spacing,
         top = cy0 + _heading_h(chapter) + _player_h()
         return top
 
-    result = []
+    # ── Flatten consecutive same-chapter groups into one item stream ──────
+    chapters = []  # [(chapter, chapter_time, [items...]), ...]
     for page in pages:
         chapter = page.get('chapter')
-        chapter_time = page.get('chapter_time')  # set by _fix_chapters_from_words/utterances
-        items = list(page['items'])
+        chapter_time = page.get('chapter_time')
+        if chapters and chapters[-1][0] == chapter:
+            chapters[-1][2].extend(page['items'])
+            if chapters[-1][1] is None and chapter_time is not None:
+                chapters[-1][1] = chapter_time
+        else:
+            chapters.append([chapter, chapter_time, list(page['items'])])
+
+    result = []
+    for chapter, chapter_time, items in chapters:
         first_split = True
 
         while items:
