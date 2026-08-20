@@ -35,3 +35,6 @@ Thumbs.db
 .env
 *.env
 secrets.py
+
+# Bundled ffmpeg/ffprobe binaries (~175 MB) - see README
+assets/*.exe

@@ -10,8 +10,9 @@ with a customtkinter GUI.
 
 ## Download
 
-A prebuilt single-file exe is on the [Releases page](../../releases/latest) —
-no Python install required.
+A prebuilt single-file exe is on the [Releases page](../../releases/latest).
+Download it, double-click, and it runs — no Python, and no FFmpeg install:
+ffmpeg and ffprobe are bundled inside the exe.
 
 ## How it works
 
@@ -30,7 +31,9 @@ pip install -r requirements.txt
 python storysync.py
 ```
 
-FFmpeg must be installed and on your `PATH`.
+Running from source needs FFmpeg on your `PATH`. The packaged exe does not —
+it carries its own copy. `storysync/ffmpeg_paths.py` picks the bundled binary
+when frozen and falls back to `PATH` otherwise.
 
 Transcription API keys are entered in the app and stored in
 `%USERPROFILE%\.storysync_config.json`, alongside your saved presets in
@@ -51,5 +54,7 @@ remove it.
 
 - Windows only.
 - The released exe is unsigned, so SmartScreen warns on first run.
+- ffmpeg and ffprobe are redistributed inside the released exe under their own
+  licences.
 - Transcription requires an internet connection and an API key for whichever
   provider you choose.

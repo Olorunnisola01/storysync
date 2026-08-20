@@ -8,6 +8,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from storysync.ffmpeg_paths import ffmpeg_path, no_window_kwargs
 from storysync.matching import build_timeline
 from storysync.render.config import RenderConfig
 from storysync.render.fonts import load_fonts
@@ -17,7 +18,8 @@ from storysync.render.layout import LayoutCache, reflow_pages
 
 def check_ffmpeg():
     try:
-        r = subprocess.run(['ffmpeg', '-version'], capture_output=True, timeout=10)
+        r = subprocess.run([ffmpeg_path(), '-version'], capture_output=True,
+                           timeout=10, **no_window_kwargs())
         return r.returncode == 0
     except Exception:
         return False
@@ -212,7 +214,7 @@ def build_video(pages, audio_path, output_path, W, H, cfg: RenderConfig,
 
     preset_name = 'ultrafast' if fast_encode else 'fast'
     cmd = [
-        'ffmpeg', '-y',
+        ffmpeg_path(), '-y',
         '-f', 'concat', '-safe', '0', '-i', str(concat_file),
         '-i', str(audio_path),
         '-vf', f'fps=30,scale={W}:{H}:flags=lanczos',
@@ -222,7 +224,7 @@ def build_video(pages, audio_path, output_path, W, H, cfg: RenderConfig,
         '-map', '0:v:0', '-map', '1:a:0', '-shortest',
         str(output_path),
     ]
-    result = subprocess.run(cmd, capture_output=True)
+    result = subprocess.run(cmd, capture_output=True, **no_window_kwargs())
     _cleanup(tmp, png_files, extra_paths=trans_png_paths)
 
     if result.returncode != 0:

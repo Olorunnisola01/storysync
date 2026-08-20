@@ -9,6 +9,8 @@ pyinstaller --onefile --windowed ^
   --hidden-import storysync.gui ^
   --hidden-import storysync.transcription ^
   --hidden-import storysync.render ^
+  --add-binary "assets\ffmpeg.exe;." ^
+  --add-binary "assets\ffprobe.exe;." ^
   --add-data "C:\Windows\Fonts\georgiab.ttf;fonts" ^
   --add-data "C:\Windows\Fonts\georgia.ttf;fonts" ^
   --add-data "C:\Windows\Fonts\timesbd.ttf;fonts" ^

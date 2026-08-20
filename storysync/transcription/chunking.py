@@ -4,12 +4,14 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from storysync.ffmpeg_paths import ffmpeg_path, ffprobe_path, no_window_kwargs
+
 
 def get_audio_duration(audio_path):
     r = subprocess.run(
-        ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+        [ffprobe_path(), '-v', 'error', '-show_entries', 'format=duration',
          '-of', 'default=noprint_wrappers=1:nokey=1', str(audio_path)],
-        capture_output=True, text=True)
+        capture_output=True, text=True, **no_window_kwargs())
     try:
         return float(r.stdout.strip())
     except Exception:
@@ -37,13 +39,13 @@ def chunk_audio(audio_path, chunk_seconds=600, overlap=2.0):
     while offset < duration - 0.1:
         out = tmp_dir / f'chunk_{idx:03d}.flac'
         cmd = [
-            'ffmpeg', '-y', '-ss', str(max(0, offset - (overlap if idx else 0))),
+            ffmpeg_path(), '-y', '-ss', str(max(0, offset - (overlap if idx else 0))),
             '-i', str(audio_path),
             '-t', str(chunk_seconds + overlap),
             '-ar', '16000', '-ac', '1', '-c:a', 'flac',
             str(out),
         ]
-        result = subprocess.run(cmd, capture_output=True)
+        result = subprocess.run(cmd, capture_output=True, **no_window_kwargs())
         if result.returncode != 0 or not out.exists():
             break
         yield str(out), max(0, offset - (overlap if idx else 0))
